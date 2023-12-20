@@ -25,6 +25,22 @@
     <div class="row">
       <div class="col-lg-8 col-md-10 mx-auto">
         <!-- TODO:-Add CKEditor and render the form here -->
+          <form action="{{ url_for('add_new_post') }}" method="post" novalidate>
+              {{ form.csrf_token }}
+              {{ form.title.label(class_="form-label fw-bold") }}
+              {{ form.title(class_="form-control") }}
+              {{ form.subtitle.label(class_="form-label fw-bold") }}
+              {{ form.subtitle(class_="form-control") }}
+              {{ form.author.label(class_="form-label fw-bold") }}
+              {{ form.author(class_="form-control") }}
+              {{ form.img_url.label(class_="form-label fw-bold") }}
+              {{ form.img_url(class_="form-control") }}
+              {{ form.body.label(class_="form-label fw-bold") }}
+              {{ form.body(class_="form-control") }}
+              {{ form.submit(class_="btn btn-primary mt-2") }}
+          </form>
+          {{ ckeditor.load() }}
+          {{ ckeditor.config(name='body') }}
       </div>
     </div>
   </div>

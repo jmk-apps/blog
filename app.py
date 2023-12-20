@@ -1,5 +1,5 @@
 from bs4 import Tag
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, request
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import Integer, String, Text
@@ -13,6 +13,9 @@ import os
 class Base(DeclarativeBase):
     pass
 
+
+# edit variable is used to check if the user is editing a post or creating a new post.
+edit = False
 
 # Allowed Tags for the html-sanitizer
 Tags = {
@@ -65,6 +68,7 @@ def show_post(post_id):
 # TODO: add_new_post() to create a new blog post
 @app.route('/make-post', methods=['GET', 'POST'])
 def add_new_post():
+    edit = False
     post_form = PostForm()
     if post_form.validate_on_submit():
         current_date = datetime.datetime.now()
@@ -92,10 +96,33 @@ def add_new_post():
         db.session.add(new_post)
         db.session.commit()
         return redirect(url_for("get_all_posts"))
-    return render_template("make-post.html", form=post_form)
+    return render_template("make-post.html", form=post_form, edit=edit)
 
 
 # TODO: edit_post() to change an existing blog post
+@app.route('/edit-post/<int:post_id>', methods=['GET', 'POST'])
+def edit_post(post_id):
+    edit = True
+    edit_form = PostForm()
+    current_post = db.session.execute(db.select(BlogPost).where(BlogPost.id == post_id)).scalar()
+    if edit_form.validate_on_submit():
+        current_post.title = edit_form.title.data
+        current_post.subtitle = edit_form.subtitle.data
+        current_post.author = edit_form.author.data
+        current_post.body = edit_form.body.data
+        current_post.img_url = edit_form.img_url.data
+        db.session.commit()
+        return redirect(url_for("show_post", post_id=post_id))
+
+    if (request.method == "GET") and (current_post is not None):
+        edit_form.title.data = current_post.title
+        edit_form.subtitle.data = current_post.subtitle
+        edit_form.author.data = current_post.author
+        edit_form.body.data = current_post.body
+        edit_form.img_url.data = current_post.img_url
+
+    return render_template("make-post.html", form=edit_form, edit=edit, id=post_id)
+
 
 # TODO: delete_post() to remove a blog post from the database
 

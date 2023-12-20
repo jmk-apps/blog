@@ -51,7 +51,7 @@ with app.app_context():
 
 
 @app.route('/')
-def get_all_posts():
+def home():
     # TODO: Query the database for all the posts. Convert the data to a python list.
     posts = db.session.execute(db.select(BlogPost)).scalars().all()
     return render_template("index.html", all_posts=posts)
@@ -95,7 +95,7 @@ def add_new_post():
         )
         db.session.add(new_post)
         db.session.commit()
-        return redirect(url_for("get_all_posts"))
+        return redirect(url_for("home"))
     return render_template("make-post.html", form=post_form, edit=edit)
 
 
@@ -125,6 +125,13 @@ def edit_post(post_id):
 
 
 # TODO: delete_post() to remove a blog post from the database
+@app.route("/delete/<int:post_id>", methods=["GET"])
+def delete_post(post_id):
+    post = db.session.execute(db.select(BlogPost).where(BlogPost.id == post_id)).scalar()
+    db.session.delete(post)
+    db.session.commit()
+    return redirect(url_for("home"))
+
 
 @app.route("/about")
 def about():

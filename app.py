@@ -1,12 +1,13 @@
 from bs4 import Tag
-from flask import Flask, render_template, redirect, url_for, request
+from flask import Flask, render_template, redirect, url_for, request, flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, Text
-from forms import PostForm, RegisterForm
+from forms import PostForm, RegisterForm, LoginForm
 from flask_ckeditor import CKEditor
 from html_sanitizer import Sanitizer
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 import datetime
 import os
 
@@ -42,7 +43,9 @@ app.config['SECRET_KEY'] = os.environ.get('FLASK_KEY')
 # Initialize the CKEditor
 ckeditor = CKEditor(app)
 
-# TODO: Configure Flask-Login
+# Configure Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
 
 # Connect to the database
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DB_URI')
@@ -63,7 +66,7 @@ class BlogPost(db.Model):
 
 
 # User Table
-class User(db.Model):
+class User(db.Model, UserMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(250), nullable=False)
@@ -76,11 +79,22 @@ with app.app_context():
     db.create_all()
 
 
+# Flask-login callback. This callback is used to reload the user object from the user ID stored in the session
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.execute(db.select(User).where(User.id == user_id)).scalar()
+
+
 # TODO: Use Werkzeug to hash the user's password when creating a new user.
 @app.route('/register', methods=["GET", "POST"])
 def register():
     register_form = RegisterForm()
     if register_form.validate_on_submit():
+        registered_user = db.session.execute(db.select(User).where(User.email == register_form.email.data)).scalar()
+        if registered_user is not None:
+            flash("You've already signed up with that email, log in instead!")
+            return redirect(url_for('login'))
+
         new_user = User(
             email=register_form.email.data,
             password=generate_password_hash(register_form.password.data, method="pbkdf2"),
@@ -88,19 +102,32 @@ def register():
         )
         db.session.add(new_user)
         db.session.commit()
+        login_user(new_user)
         return redirect(url_for('home'))
     return render_template("register.html", form=register_form)
 
 
 # TODO: Retrieve a user from the database based on their email.
-@app.route('/login')
+@app.route('/login', methods=["GET", "POST"])
 def login():
-    return render_template("login.html")
+    login_form = LoginForm()
+    if login_form.validate_on_submit():
+        user = db.session.execute(db.select(User).where(User.email == login_form.email.data)).scalar()
+        if user is None:
+            flash("That email does not exist, please try again.")
+            return redirect(url_for('login'))
+        if not check_password_hash(user.password, login_form.password.data):
+            flash("Password incorrect, please try again.")
+            return redirect(url_for('login'))
+        login_user(user)
+        return redirect(url_for('home'))
+    return render_template("login.html", form=login_form)
 
 
 @app.route('/logout')
 def logout():
-    return redirect(url_for('get_all_posts'))
+    logout_user()
+    return redirect(url_for('home'))
 
 
 @app.route('/')

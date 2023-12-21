@@ -26,6 +26,11 @@ class RegisterForm(FlaskForm):
                                                                    message="Name must be between %(min)d and %(max)d characters.")])
     submit = SubmitField("SIGN ME UP!")
 
+
 # TODO: Create a LoginForm to login existing users
+class LoginForm(FlaskForm):
+    email = EmailField("Email", validators=[InputRequired(), Email()])
+    password = PasswordField("Password", validators=[InputRequired(), Length(min=1, message="Password is required.")])
+    submit = SubmitField("LET ME IN!")
 
 # TODO: Create a CommentForm so users can leave comments below posts

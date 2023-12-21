@@ -1,11 +1,12 @@
 from bs4 import Tag
 from flask import Flask, render_template, redirect, url_for, request
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, Text
-from forms import PostForm
+from forms import PostForm, RegisterForm
 from flask_ckeditor import CKEditor
 from html_sanitizer import Sanitizer
+from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
 import os
 
@@ -23,11 +24,25 @@ Tags = {
     "li", "br", "sub", "sup", "hr", "img",
 }
 
+# Set up the sanitizer to allow the tags specified in the "Tags" variable.
+# It also will allow img
+# tags as img tags are not allowed by default
+sanitizer = Sanitizer({
+    "tags": Tags,
+    "attributes": {
+        "a": ("href", "name", "target", "title", "id", "rel"),
+        "img": {"alt", "src"}
+    },
+    "empty": {"hr", "a", "br", "img"},
+})
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_KEY')
 
 # Initialize the CKEditor
 ckeditor = CKEditor(app)
+
+# TODO: Configure Flask-Login
 
 # Connect to the database
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DB_URI')
@@ -36,6 +51,7 @@ db.init_app(app)
 
 
 # Configure database Tables
+# Blogpost Table
 class BlogPost(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
@@ -46,44 +62,68 @@ class BlogPost(db.Model):
     img_url: Mapped[str] = mapped_column(String(250), nullable=False)
 
 
+# User Table
+class User(db.Model):
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
+    password: Mapped[str] = mapped_column(String(250), nullable=False)
+    name: Mapped[str] = mapped_column(String(250), nullable=False)
+
+
+# TODO: Create a User table for all your registered users.
+
 with app.app_context():
     db.create_all()
 
 
+# TODO: Use Werkzeug to hash the user's password when creating a new user.
+@app.route('/register', methods=["GET", "POST"])
+def register():
+    register_form = RegisterForm()
+    if register_form.validate_on_submit():
+        new_user = User(
+            email=register_form.email.data,
+            password=generate_password_hash(register_form.password.data, method="pbkdf2"),
+            name=register_form.name.data
+        )
+        db.session.add(new_user)
+        db.session.commit()
+        return redirect(url_for('home'))
+    return render_template("register.html", form=register_form)
+
+
+# TODO: Retrieve a user from the database based on their email.
+@app.route('/login')
+def login():
+    return render_template("login.html")
+
+
+@app.route('/logout')
+def logout():
+    return redirect(url_for('get_all_posts'))
+
+
 @app.route('/')
 def home():
-    # TODO: Query the database for all the posts. Convert the data to a python list.
     posts = db.session.execute(db.select(BlogPost)).scalars().all()
     return render_template("index.html", all_posts=posts)
 
 
-# TODO: Add a route so that you can click on individual posts.
+# TODO: Allow logged-in users to comment on posts
 @app.route('/post/<int:post_id>')
 def show_post(post_id):
-    # TODO: Retrieve a BlogPost from the database based on the post_id
     requested_post = db.session.execute(db.select(BlogPost).where(BlogPost.id == post_id)).scalar()
     return render_template("post.html", post=requested_post)
 
 
-# TODO: add_new_post() to create a new blog post
+# TODO: Use a decorator so only an admin user can create a new post
 @app.route('/make-post', methods=['GET', 'POST'])
 def add_new_post():
     edit = False
     post_form = PostForm()
     if post_form.validate_on_submit():
         current_date = datetime.datetime.now()
-        # Set up the sanitizer to allow the tags specified in the "Tags" variable.
-        # It also will allow img
-        # tags as img tags are not allowed by default
-        sanitizer = Sanitizer({
-            "tags": Tags,
-            "attributes": {
-                "a": ("href", "name", "target", "title", "id", "rel"),
-                "img": {"alt", "src"}
-            },
-            "empty": {"hr", "a", "br", "img"},
-        })
-        # Cleans the data of any malicious content, e.g., script tags.
+        # Sanitizes the HTML from the body bore storing it in the database.
         clean_data = sanitizer.sanitize(post_form.body.data)
         new_post = BlogPost(
             title=post_form.title.data,
@@ -99,7 +139,7 @@ def add_new_post():
     return render_template("make-post.html", form=post_form, edit=edit)
 
 
-# TODO: edit_post() to change an existing blog post
+# TODO: Use a decorator so only an admin user can edit a post
 @app.route('/edit-post/<int:post_id>', methods=['GET', 'POST'])
 def edit_post(post_id):
     edit = True
@@ -109,7 +149,7 @@ def edit_post(post_id):
         current_post.title = edit_form.title.data
         current_post.subtitle = edit_form.subtitle.data
         current_post.author = edit_form.author.data
-        current_post.body = edit_form.body.data
+        current_post.body = sanitizer.sanitize(edit_form.body.data)
         current_post.img_url = edit_form.img_url.data
         db.session.commit()
         return redirect(url_for("show_post", post_id=post_id))
@@ -124,7 +164,7 @@ def edit_post(post_id):
     return render_template("make-post.html", form=edit_form, edit=edit, id=post_id)
 
 
-# TODO: delete_post() to remove a blog post from the database
+# TODO: Use a decorator so only an admin user can delete a post
 @app.route("/delete/<int:post_id>", methods=["GET"])
 def delete_post(post_id):
     post = db.session.execute(db.select(BlogPost).where(BlogPost.id == post_id)).scalar()

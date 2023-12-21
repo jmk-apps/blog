@@ -32,7 +32,9 @@
           Posted by
           <a href="#">{{post.author}}</a>
           on {{post.date}}
-            <a href="{{ url_for('delete_post', post_id=post.id) }}">✘</a>
+            {% if current_user.id == 1 %}
+              <a href="{{ url_for('delete_post', post_id=post.id) }}">✘</a>
+            {% endif %}
         </p>
       </div>
       <!-- Divider-->
@@ -42,11 +44,13 @@
       <!-- New Post -->
       <div class="d-flex justify-content-end mb-4">
       <!-- TODO: Adding new posts -->
-        <a
-          class="btn btn-primary float-right"
-          href="{{ url_for('add_new_post') }}"
-          >Create New Post</a
-        >
+          {% if current_user.id == 1 %}
+            <a
+              class="btn btn-primary float-right"
+              href="{{ url_for('add_new_post') }}"
+              >Create New Post</a
+            >
+          {% endif %}
       </div>
 
       <!-- Pager-->

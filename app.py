@@ -1,5 +1,5 @@
 from bs4 import Tag
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, redirect, url_for, request, flash, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, Text
@@ -8,6 +8,7 @@ from flask_ckeditor import CKEditor
 from html_sanitizer import Sanitizer
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
+from functools import wraps
 import datetime
 import os
 
@@ -36,6 +37,23 @@ sanitizer = Sanitizer({
     },
     "empty": {"hr", "a", "br", "img"},
 })
+
+
+# Decorator used for admin access
+def admin_only(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # if the user has not logged return abort with 403 error
+        if current_user.is_anonymous:
+            return abort(403)
+        # if the user is not an admin return abort with 403 error
+        if current_user.id != 1:
+            return abort(403)
+        # Otherwise continue with the route function
+        return f(*args, **kwargs)
+
+    return decorated_function
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_KEY')
@@ -72,8 +90,6 @@ class User(db.Model, UserMixin):
     password: Mapped[str] = mapped_column(String(250), nullable=False)
     name: Mapped[str] = mapped_column(String(250), nullable=False)
 
-
-# TODO: Create a User table for all your registered users.
 
 with app.app_context():
     db.create_all()
@@ -113,6 +129,7 @@ def login():
     login_form = LoginForm()
     if login_form.validate_on_submit():
         user = db.session.execute(db.select(User).where(User.email == login_form.email.data)).scalar()
+
         if user is None:
             flash("That email does not exist, please try again.")
             return redirect(url_for('login'))
@@ -125,6 +142,7 @@ def login():
 
 
 @app.route('/logout')
+@login_required
 def logout():
     logout_user()
     return redirect(url_for('home'))
@@ -145,6 +163,7 @@ def show_post(post_id):
 
 # TODO: Use a decorator so only an admin user can create a new post
 @app.route('/make-post', methods=['GET', 'POST'])
+@admin_only
 def add_new_post():
     edit = False
     post_form = PostForm()
@@ -168,6 +187,7 @@ def add_new_post():
 
 # TODO: Use a decorator so only an admin user can edit a post
 @app.route('/edit-post/<int:post_id>', methods=['GET', 'POST'])
+@admin_only
 def edit_post(post_id):
     edit = True
     edit_form = PostForm()
@@ -193,6 +213,7 @@ def edit_post(post_id):
 
 # TODO: Use a decorator so only an admin user can delete a post
 @app.route("/delete/<int:post_id>", methods=["GET"])
+@admin_only
 def delete_post(post_id):
     post = db.session.execute(db.select(BlogPost).where(BlogPost.id == post_id)).scalar()
     db.session.delete(post)

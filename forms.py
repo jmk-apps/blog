@@ -9,8 +9,6 @@ class PostForm(FlaskForm):
                                                                                message="Blog Post Title must be between %(min)d and %(max)d characters.")])
     subtitle = StringField("Subtitle", validators=[InputRequired(), Length(min=1, max=250,
                                                                            message="Subtitle must be between %(min)d and %(max)d characters.")])
-    author = StringField("Your Name", validators=[InputRequired(), Length(min=1, max=250,
-                                                                          message="Your Name must be between %(min)d and %(max)d characters.")])
     img_url = URLField("Blog Image URL", validators=[InputRequired(), URL(), Length(min=1, max=250,
                                                                                     message="The Blog Image URL must be between %(min)d and %(max)d characters.")])
     body = CKEditorField("Blog Content", validators=[InputRequired()])

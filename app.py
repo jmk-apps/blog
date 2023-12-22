@@ -2,7 +2,7 @@ from bs4 import Tag
 from flask import Flask, render_template, redirect, url_for, request, flash, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, Text
+from sqlalchemy import Integer, String, Text, ForeignKey
 from forms import PostForm, RegisterForm, LoginForm
 from flask_ckeditor import CKEditor
 from html_sanitizer import Sanitizer
@@ -72,23 +72,34 @@ db.init_app(app)
 
 
 # Configure database Tables
+
+# User Table
+class User(db.Model, UserMixin):
+    __tablename__ = 'user_table'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
+    password: Mapped[str] = mapped_column(String(250), nullable=False)
+    name: Mapped[str] = mapped_column(String(250), nullable=False)
+
+    # One-to-many relationship with the Blog posts.
+    posts: Mapped[list["BlogPost"]] = relationship(back_populates="author")
+
+
 # Blogpost Table
 class BlogPost(db.Model):
+    __tablename__ = 'blogpost_table'
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
     subtitle: Mapped[str] = mapped_column(String(250), nullable=False)
     date: Mapped[str] = mapped_column(String(250), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
-    author: Mapped[str] = mapped_column(String(250), nullable=False)
     img_url: Mapped[str] = mapped_column(String(250), nullable=False)
 
-
-# User Table
-class User(db.Model, UserMixin):
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    email: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
-    password: Mapped[str] = mapped_column(String(250), nullable=False)
-    name: Mapped[str] = mapped_column(String(250), nullable=False)
+    # Many-to-one relationship with the User.
+    author_id: Mapped[int] = mapped_column(ForeignKey("user_table.id"))
+    author: Mapped["User"] = relationship(back_populates="posts")
 
 
 with app.app_context():
@@ -174,7 +185,7 @@ def add_new_post():
         new_post = BlogPost(
             title=post_form.title.data,
             subtitle=post_form.subtitle.data,
-            author=post_form.author.data,
+            author_id=current_user.id,
             date=current_date.strftime("%B %d, %Y"),
             body=clean_data,
             img_url=post_form.img_url.data
@@ -195,7 +206,6 @@ def edit_post(post_id):
     if edit_form.validate_on_submit():
         current_post.title = edit_form.title.data
         current_post.subtitle = edit_form.subtitle.data
-        current_post.author = edit_form.author.data
         current_post.body = sanitizer.sanitize(edit_form.body.data)
         current_post.img_url = edit_form.img_url.data
         db.session.commit()
@@ -204,7 +214,6 @@ def edit_post(post_id):
     if (request.method == "GET") and (current_post is not None):
         edit_form.title.data = current_post.title
         edit_form.subtitle.data = current_post.subtitle
-        edit_form.author.data = current_post.author
         edit_form.body.data = current_post.body
         edit_form.img_url.data = current_post.img_url
 

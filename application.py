@@ -73,7 +73,7 @@ rds_port = os.environ['RDS_PORT']
 rds_db_name = os.environ['RDS_DB_NAME']
 
 # Connect to the database
-application.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{rds_username}:{rds_password}@{rds_host}:{rds_port}/{rds_db_name}"
+application.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql+psycopg2://{rds_username}:{rds_password}@{rds_host}:{rds_port}/{rds_db_name}"
 db = SQLAlchemy(model_class=Base)
 db.init_app(application)
 

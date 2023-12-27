@@ -4,6 +4,7 @@ from wtforms.validators import InputRequired, Length, URL, Email
 from flask_ckeditor import CKEditorField
 
 
+# Post form for creating new blog posts.
 class PostForm(FlaskForm):
     title = StringField("Blog Post Title", validators=[InputRequired(), Length(min=1, max=250,
                                                                                message="Blog Post Title must be between %(min)d and %(max)d characters.")])
@@ -15,7 +16,7 @@ class PostForm(FlaskForm):
     submit = SubmitField("SUBMIT POST")
 
 
-# TODO: Create a RegisterForm to register new users
+# RegisterForm to register new users.
 class RegisterForm(FlaskForm):
     email = EmailField("Email", validators=[InputRequired(), Email()])
     password = PasswordField("Password", validators=[InputRequired(), Length(min=8, max=20,
@@ -25,10 +26,14 @@ class RegisterForm(FlaskForm):
     submit = SubmitField("SIGN ME UP!")
 
 
-# TODO: Create a LoginForm to login existing users
+# LoginForm to log in existing users.
 class LoginForm(FlaskForm):
     email = EmailField("Email", validators=[InputRequired(), Email()])
-    password = PasswordField("Password", validators=[InputRequired(), Length(min=1, message="Password is required.")])
+    password = PasswordField("Password", validators=[InputRequired()])
     submit = SubmitField("LET ME IN!")
 
-# TODO: Create a CommentForm so users can leave comments below posts
+
+# CommentForm so users can leave comments below posts
+class CommentForm(FlaskForm):
+    comment = CKEditorField("Comment", validators=[InputRequired()])
+    submit = SubmitField("SUBMIT COMMENT")

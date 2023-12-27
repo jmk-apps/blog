@@ -1,9 +1,9 @@
-from bs4 import Tag
 from flask import Flask, render_template, redirect, url_for, request, flash, abort
+from flask_gravatar import Gravatar
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, Text, ForeignKey
-from forms import PostForm, RegisterForm, LoginForm
+from forms import PostForm, RegisterForm, LoginForm, CommentForm
 from flask_ckeditor import CKEditor
 from html_sanitizer import Sanitizer
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -65,17 +65,34 @@ ckeditor = CKEditor(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 
+# Aws database credentials
+rds_username = os.environ['RDS_USERNAME']
+rds_password = os.environ['RDS_PASSWORD']
+rds_host = os.environ['RDS_HOSTNAME']
+rds_port = os.environ['RDS_PORT']
+rds_db_name = os.environ['RDS_DB_NAME']
+
 # Connect to the database
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DB_URI')
+app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{rds_username}:{rds_password}@{rds_host}:{rds_port}/{rds_db_name}"
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
+
+# Provides gravatar images for users.
+gravatar = Gravatar(app,
+                    size=100,
+                    rating='g',
+                    default='retro',
+                    force_default=False,
+                    force_lower=False,
+                    use_ssl=False,
+                    base_url=None)
 
 
 # Configure database Tables
 
 # User Table
 class User(db.Model, UserMixin):
-    __tablename__ = 'user_table'
+    __tablename__ = 'user'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
@@ -85,10 +102,13 @@ class User(db.Model, UserMixin):
     # One-to-many relationship with the Blog posts.
     posts: Mapped[list["BlogPost"]] = relationship(back_populates="author")
 
+    # One-to-many relationship with the Comments.
+    comments: Mapped[list["Comment"]] = relationship(back_populates="comment_author")
+
 
 # Blogpost Table
 class BlogPost(db.Model):
-    __tablename__ = 'blogpost_table'
+    __tablename__ = 'blogpost'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
@@ -98,8 +118,27 @@ class BlogPost(db.Model):
     img_url: Mapped[str] = mapped_column(String(250), nullable=False)
 
     # Many-to-one relationship with the User.
-    author_id: Mapped[int] = mapped_column(ForeignKey("user_table.id"))
+    author_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
     author: Mapped["User"] = relationship(back_populates="posts")
+
+    # One-to-many relationship with the Comments.
+    comments: Mapped[list["Comment"]] = relationship(back_populates="parent_post")
+
+
+# Comments Table
+class Comment(db.Model):
+    __tablename__ = 'comments'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Many-to-one relationship with the User.
+    comment_author: Mapped["User"] = relationship(back_populates="comments")
+    author_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+
+    # Many-to-one relationship with the Blog Posts.
+    parent_post: Mapped["BlogPost"] = relationship(back_populates="comments")
+    post_id: Mapped[int] = mapped_column(ForeignKey("blogpost.id"))
 
 
 with app.app_context():
@@ -166,10 +205,24 @@ def home():
 
 
 # TODO: Allow logged-in users to comment on posts
-@app.route('/post/<int:post_id>')
+@app.route('/post/<int:post_id>', methods=['GET', 'POST'])
 def show_post(post_id):
+    comment_form = CommentForm()
     requested_post = db.session.execute(db.select(BlogPost).where(BlogPost.id == post_id)).scalar()
-    return render_template("post.html", post=requested_post)
+    if comment_form.validate_on_submit():
+        if not current_user.is_authenticated:
+            flash("You need to login or register to comment.")
+            return redirect(url_for("login"))
+        clean_data = sanitizer.sanitize(comment_form.comment.data)
+        new_comment = Comment(
+            text=clean_data,
+            author_id=current_user.id,
+            post_id=requested_post.id
+        )
+        db.session.add(new_comment)
+        db.session.commit()
+        return redirect(url_for('show_post', post_id=post_id))
+    return render_template("post.html", post=requested_post, form=comment_form)
 
 
 # TODO: Use a decorator so only an admin user can create a new post

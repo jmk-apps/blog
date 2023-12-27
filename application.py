@@ -55,15 +55,15 @@ def admin_only(f):
     return decorated_function
 
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('FLASK_KEY')
+application = Flask(__name__)
+application.config['SECRET_KEY'] = os.environ.get('FLASK_KEY')
 
 # Initialize the CKEditor
-ckeditor = CKEditor(app)
+ckeditor = CKEditor(application)
 
 # Configure Flask-Login
 login_manager = LoginManager()
-login_manager.init_app(app)
+login_manager.init_app(application)
 
 # Aws database credentials
 rds_username = os.environ['RDS_USERNAME']
@@ -73,12 +73,12 @@ rds_port = os.environ['RDS_PORT']
 rds_db_name = os.environ['RDS_DB_NAME']
 
 # Connect to the database
-app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{rds_username}:{rds_password}@{rds_host}:{rds_port}/{rds_db_name}"
+application.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{rds_username}:{rds_password}@{rds_host}:{rds_port}/{rds_db_name}"
 db = SQLAlchemy(model_class=Base)
-db.init_app(app)
+db.init_app(application)
 
 # Provides gravatar images for users.
-gravatar = Gravatar(app,
+gravatar = Gravatar(application,
                     size=100,
                     rating='g',
                     default='retro',
@@ -141,7 +141,7 @@ class Comment(db.Model):
     post_id: Mapped[int] = mapped_column(ForeignKey("blogpost.id"))
 
 
-with app.app_context():
+with application.app_context():
     db.create_all()
 
 
@@ -152,7 +152,7 @@ def load_user(user_id):
 
 
 # TODO: Use Werkzeug to hash the user's password when creating a new user.
-@app.route('/register', methods=["GET", "POST"])
+@application.route('/register', methods=["GET", "POST"])
 def register():
     register_form = RegisterForm()
     if register_form.validate_on_submit():
@@ -174,7 +174,7 @@ def register():
 
 
 # TODO: Retrieve a user from the database based on their email.
-@app.route('/login', methods=["GET", "POST"])
+@application.route('/login', methods=["GET", "POST"])
 def login():
     login_form = LoginForm()
     if login_form.validate_on_submit():
@@ -191,21 +191,21 @@ def login():
     return render_template("login.html", form=login_form)
 
 
-@app.route('/logout')
+@application.route('/logout')
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('home'))
 
 
-@app.route('/')
+@application.route('/')
 def home():
     posts = db.session.execute(db.select(BlogPost)).scalars().all()
     return render_template("index.html", all_posts=posts)
 
 
 # TODO: Allow logged-in users to comment on posts
-@app.route('/post/<int:post_id>', methods=['GET', 'POST'])
+@application.route('/post/<int:post_id>', methods=['GET', 'POST'])
 def show_post(post_id):
     comment_form = CommentForm()
     requested_post = db.session.execute(db.select(BlogPost).where(BlogPost.id == post_id)).scalar()
@@ -226,7 +226,7 @@ def show_post(post_id):
 
 
 # TODO: Use a decorator so only an admin user can create a new post
-@app.route('/make-post', methods=['GET', 'POST'])
+@application.route('/make-post', methods=['GET', 'POST'])
 @admin_only
 def add_new_post():
     edit = False
@@ -250,7 +250,7 @@ def add_new_post():
 
 
 # TODO: Use a decorator so only an admin user can edit a post
-@app.route('/edit-post/<int:post_id>', methods=['GET', 'POST'])
+@application.route('/edit-post/<int:post_id>', methods=['GET', 'POST'])
 @admin_only
 def edit_post(post_id):
     edit = True
@@ -274,7 +274,7 @@ def edit_post(post_id):
 
 
 # TODO: Use a decorator so only an admin user can delete a post
-@app.route("/delete/<int:post_id>", methods=["GET"])
+@application.route("/delete/<int:post_id>", methods=["GET"])
 @admin_only
 def delete_post(post_id):
     post = db.session.execute(db.select(BlogPost).where(BlogPost.id == post_id)).scalar()
@@ -283,15 +283,15 @@ def delete_post(post_id):
     return redirect(url_for("home"))
 
 
-@app.route("/about")
+@application.route("/about")
 def about():
     return render_template("about.html")
 
 
-@app.route("/contact")
+@application.route("/contact")
 def contact():
     return render_template("contact.html")
 
 
 if __name__ == '__main__':
-    app.run()
+    application.run()

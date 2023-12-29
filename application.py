@@ -65,15 +65,8 @@ ckeditor = CKEditor(application)
 login_manager = LoginManager()
 login_manager.init_app(application)
 
-# Aws database credentials
-rds_username = os.environ['RDS_USERNAME']
-rds_password = os.environ['RDS_PASSWORD']
-rds_host = os.environ['RDS_HOSTNAME']
-rds_port = os.environ['RDS_PORT']
-rds_db_name = os.environ['RDS_DB_NAME']
-
 # Connect to the database
-application.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql+psycopg2://{rds_username}:{rds_password}@{rds_host}:{rds_port}/{rds_db_name}"
+application.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DB_URI']
 db = SQLAlchemy(model_class=Base)
 db.init_app(application)
 
